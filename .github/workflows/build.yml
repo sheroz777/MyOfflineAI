@@ -14,7 +14,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
-      - run: gradle assembleDebug --console=plain | grep -E "FAILURE|What went wrong|Execution failed|Could not|error:" -A 5
+      - run: gradle assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: MyOfflineAI-debug
