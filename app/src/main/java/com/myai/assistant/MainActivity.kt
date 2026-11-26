@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity() {
             if (text.isNotEmpty()) {
                 userInput.text.clear()
                 appendMessage("Вы: $text")
+                appendMessage("vang quer: (Загружаю модель и думаю, подождите 20-40 сек...)")
 
                 CoroutineScope(Dispatchers.IO).launch {
                     val response = brain.askAI(text, isOnlineMode = false)

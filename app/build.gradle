@@ -18,9 +18,24 @@ android {
         }
     }
 
+    signingConfigs {
+        debug {
+            storeFile file("vangquer.jks")
+            storePassword "123456"
+            keyAlias "vangquer"
+            keyPassword "123456"
+        }
+        release {
+            storeFile file("vangquer.jks")
+            storePassword "123456"
+            keyAlias "vangquer"
+            keyPassword "123456"
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {
