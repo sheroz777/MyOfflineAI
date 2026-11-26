@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://android.com"
-    xmlns:tools="http://android.com">
+<manifest xmlns:android="http://android.com/apk/res/android"
+    xmlns:tools="http://android.com/tools">
 
     <uses-sdk tools:overrideLibrary="com.google.mediapipe.tasks.genai, com.google.mediapipe.tasks.core" />
 
