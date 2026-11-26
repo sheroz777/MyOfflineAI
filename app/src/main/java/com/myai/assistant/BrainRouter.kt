@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.provider.MediaStore
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import android.os.Environment
 import java.io.File
 
 class BrainRouter(private val context: Context) {
@@ -18,8 +19,14 @@ class BrainRouter(private val context: Context) {
     }
 
     private fun initModel() {
-        val taskFile = File("/sdcard/Download/gemma.task")
-        val modelFile = File("/sdcard/Download/model.gguf")
+        val dlDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val extTask = File(dlDir, "gemma.task")
+        val localTask = File(context.filesDir, "gemma.task")
+        if (extTask.exists() && (!localTask.exists() || localTask.length() != extTask.length())) {
+            try { extTask.copyTo(localTask, overwrite = true) } catch (_: Exception) {}
+        }
+        val taskFile = if (localTask.exists() && localTask.length() > 0) localTask else extTask
+        val modelFile = File(dlDir, "model.gguf")
         val targetPath = when {
             taskFile.exists() -> taskFile.absolutePath
             modelFile.exists() -> modelFile.absolutePath
