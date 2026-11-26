@@ -1,7 +1,8 @@
 package com.myai.assistant
 
 import android.content.Context
-import android.os.Environment
+import android.content.Intent
+import android.provider.MediaStore
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import java.io.File
 
@@ -10,47 +11,36 @@ class BrainRouter(private val context: Context) {
     private val memoryFile = File(context.filesDir, "chat_memory.txt")
     private val factsFile = File(context.filesDir, "user_facts.txt")
     private var llmInference: LlmInference? = null
-    private var initError: String = ""
+    var statusMessage: String = "Ожидание..."
 
-    private fun initModel() {
-        val extAppDir = context.getExternalFilesDir(null)
-        val extAppTask = if (extAppDir != null) File(extAppDir, "gemma.task") else null
-        val dlDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val dlTask = File(dlDir, "gemma.task")
-        val localTask = File(context.filesDir, "gemma.task")
+    fun isModelLoaded(): Boolean = llmInference != null
 
-        val sourceTask = when {
-            extAppTask != null && extAppTask.exists() && extAppTask.length() > 0 -> extAppTask
-            dlTask.exists() && dlTask.length() > 0 -> dlTask
-            else -> null
-        }
-
-        if (sourceTask != null && (!localTask.exists() || localTask.length() != sourceTask.length())) {
-            try {
-                sourceTask.copyTo(localTask, overwrite = true)
-            } catch (e: Exception) {
-                initError = "Ошибка копирования: ${e.message}"
-            }
-        }
-
+    fun initModel(): String {
+        if (llmInference != null) return "Модель уже готова!"
+        val taskFile = File("/sdcard/Download/gemma.task")
+        val modelFile = File("/sdcard/Download/model.gguf")
         val targetPath = when {
-            localTask.exists() && localTask.length() > 0 -> localTask.absolutePath
-            extAppTask != null && extAppTask.exists() -> extAppTask.absolutePath
-            dlTask.exists() -> dlTask.absolutePath
+            taskFile.exists() && taskFile.canRead() -> taskFile.absolutePath
+            modelFile.exists() && modelFile.canRead() -> modelFile.absolutePath
             else -> null
         }
 
-        if (targetPath != null) {
-            try {
-                val options = LlmInference.LlmInferenceOptions.builder()
-                    .setModelPath(targetPath)
-                    .setMaxTokens(2048)
-                    .build()
-                llmInference = LlmInference.createFromOptions(context, options)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                initError = e.message ?: e.toString()
-            }
+        if (targetPath == null) {
+            statusMessage = "Файл gemma.task не найден в Download или нет доступа!"
+            return statusMessage
+        }
+
+        return try {
+            val options = LlmInference.LlmInferenceOptions.builder()
+                .setModelPath(targetPath)
+                .setMaxTokens(2048)
+                .build()
+            llmInference = LlmInference.createFromOptions(context, options)
+            statusMessage = "Офлайн-мозг Gemma 4 активен!"
+            statusMessage
+        } catch (e: Throwable) {
+            statusMessage = "Ошибка: ${e.message}"
+            statusMessage
         }
     }
 
@@ -60,23 +50,45 @@ class BrainRouter(private val context: Context) {
 
     fun saveToMemory(role: String, text: String) {
         memoryFile.appendText("$role: $text\n")
+        val lower = text.lowercase()
+        if (role == "Пользователь" && (lower.contains("меня зовут") || lower.contains("запомни") || lower.contains("мой телефон"))) {
+            factsFile.appendText("- $text\n")
+        }
     }
 
-    fun askAI(userMessage: String, isOnlineMode: Boolean): String {
-        saveToMemory("Вы", userMessage)
-        if (llmInference == null) {
-            initModel()
-        }
-        val engine = llmInference ?: return "Модель не готова. Положи gemma.task в Download или Android/data/com.myai.assistant/files/. (Детали: $initError)"
+    suspend fun askAI(
+        userMessage: String,
+        onProgress: suspend (String) -> Unit
+    ): String {
+        saveToMemory("Пользователь", userMessage)
 
-        val eternalFacts = if (factsFile.exists()) factsFile.readText() else ""
-        val allHistory = loadMemory()
-        val recentChat = allHistory.takeLast(1000)
+        if (userMessage.lowercase().contains("включи камеру")) {
+            val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+            val reply = "Открываю камеру."
+            saveToMemory("vang quer", reply)
+            return reply
+        }
+
+        if (llmInference == null) {
+            val res = initModel()
+            if (llmInference == null) {
+                val err = "Не удалось запустить мозг ($res). Проверь 'Доступ ко всем файлам' в настройках!"
+                saveToMemory("vang quer", err)
+                return err
+            }
+        }
+
+        onProgress("100% — Думаю над ответом...")
+
+        val eternalFacts = if (factsFile.exists()) factsFile.readText() else "Пока нет сохраненных фактов."
+        val recentChat = loadMemory().takeLast(4000)
 
         val prompt = """
             <start_of_turn>user
-            Ты мой личный офлайн-ассистент на смартфоне. Отвечай кратко и по делу на русском языке.
-            
+            Ты мой личный офлайн-ассистент vang quer на смартфоне. Отвечай кратко, тепло и по делу на русском языке.
             Вот что ты помнишь обо мне из прошлых чатов:
             $eternalFacts
             
@@ -88,12 +100,12 @@ class BrainRouter(private val context: Context) {
         """.trimIndent()
 
         val aiReply = try {
-            engine.generateResponse(prompt)
-        } catch (e: Exception) {
+            llmInference!!.generateResponse(prompt)
+        } catch (e: Throwable) {
             "Ошибка генерации: ${e.message}"
         }
 
-        saveToMemory("ИИ", aiReply)
+        saveToMemory("vang quer", aiReply)
         return aiReply
     }
 }
