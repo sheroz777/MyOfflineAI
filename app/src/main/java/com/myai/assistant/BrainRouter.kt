@@ -3,20 +3,26 @@ package com.myai.assistant
 import android.content.Context
 import android.content.Intent
 import android.provider.MediaStore
-import com.google.mediapipe.tasks.genai.llminference.LlmInference
+import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.ConversationConfig
+import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.Message
 import java.io.File
 
 class BrainRouter(private val context: Context) {
 
     private val memoryFile = File(context.filesDir, "chat_memory.txt")
     private val factsFile = File(context.filesDir, "user_facts.txt")
-    private var llmInference: LlmInference? = null
+    private var engine: Engine? = null
+    private var conversation: Conversation? = null
     var statusMessage: String = "Ожидание..."
 
-    fun isModelLoaded(): Boolean = llmInference != null
+    fun isModelLoaded(): Boolean = conversation != null
 
     fun initModel(): String {
-        if (llmInference != null) return "Модель уже готова!"
+        if (conversation != null) return "Модель уже готова!"
         val internalFile = File(context.filesDir, "gemma.litertlm")
         val downloadFile = File("/sdcard/Download/gemma.litertlm")
 
@@ -29,17 +35,20 @@ class BrainRouter(private val context: Context) {
                     return statusMessage
                 }
             } else {
-                statusMessage = "Файл gemma.litertlm не найден в Download или нет доступа!"
+                statusMessage = "Файл gemma.litertlm не найден в Download!"
                 return statusMessage
             }
         }
 
         return try {
-            val options = LlmInference.LlmInferenceOptions.builder()
-                .setModelPath(internalFile.absolutePath)
-                .setMaxTokens(1024)
-                .build()
-            llmInference = LlmInference.createFromOptions(context, options)
+            val config = EngineConfig(
+                modelPath = internalFile.absolutePath,
+                backend = Backend.CPU()
+            )
+            val newEngine = Engine(config)
+            newEngine.initialize()
+            engine = newEngine
+            conversation = newEngine.createConversation(ConversationConfig())
             statusMessage = "Офлайн-мозг Gemma 4 активен!"
             statusMessage
         } catch (e: Throwable) {
@@ -76,10 +85,10 @@ class BrainRouter(private val context: Context) {
             return reply
         }
 
-        if (llmInference == null) {
-            onProgress("Подготовка и загрузка мозга (первый раз ~30 сек)...")
+        if (conversation == null) {
+            onProgress("Загружаю мозг в память (подождите ~20 сек)...")
             val res = initModel()
-            if (llmInference == null) {
+            if (conversation == null) {
                 val err = "Не удалось запустить мозг ($res)"
                 saveToMemory("vang quer", err)
                 return err
@@ -89,23 +98,17 @@ class BrainRouter(private val context: Context) {
         onProgress("100% — Думаю над ответом...")
 
         val eternalFacts = if (factsFile.exists()) factsFile.readText() else "Пока нет сохраненных фактов."
-        val recentChat = loadMemory().takeLast(2000)
-
         val prompt = """
-            <start_of_turn>user
             Ты мой личный офлайн-ассистент vang quer на смартфоне. Отвечай кратко, тепло и по делу на русском языке.
-            Вот что ты помнишь обо мне из прошлых чатов:
+            Вот что ты помнишь обо мне:
             $eternalFacts
 
-            Недавняя переписка:
-            $recentChat
-
-            Новый вопрос: $userMessage<end_of_turn>
-            <start_of_turn>model
+            Вопрос: $userMessage
         """.trimIndent()
 
         val aiReply = try {
-            llmInference!!.generateResponse(prompt)
+            val response = conversation!!.sendMessage(Message.of(prompt))
+            response.toString()
         } catch (e: Throwable) {
             "Ошибка генерации: ${e.message}"
         }
