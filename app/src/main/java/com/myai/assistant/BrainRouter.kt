@@ -17,7 +17,7 @@ class BrainRouter(private val context: Context) {
 
     fun initModel(): String {
         if (llmInference != null) return "Модель уже готова!"
-        val taskFile = File("/sdcard/Download/gemma.task")
+        val taskFile = File("/sdcard/Download/gemma.litertlm")
         val modelFile = File("/sdcard/Download/model.gguf")
         val targetPath = when {
             taskFile.exists() && taskFile.canRead() -> taskFile.absolutePath
@@ -26,7 +26,7 @@ class BrainRouter(private val context: Context) {
         }
 
         if (targetPath == null) {
-            statusMessage = "Файл gemma.task не найден в Download или нет доступа!"
+            statusMessage = "Файл gemma.litertlm не найден в Download или нет доступа!"
             return statusMessage
         }
 
