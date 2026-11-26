@@ -1,10 +1,8 @@
 package com.myai.assistant
 
 import android.content.Context
-import android.content.Intent
-import android.provider.MediaStore
-import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import android.os.Environment
+import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import java.io.File
 
 class BrainRouter(private val context: Context) {
@@ -14,22 +12,31 @@ class BrainRouter(private val context: Context) {
     private var llmInference: LlmInference? = null
     private var initError: String = ""
 
-    init {
-        initModel()
-    }
-
     private fun initModel() {
+        val extAppDir = context.getExternalFilesDir(null)
+        val extAppTask = if (extAppDir != null) File(extAppDir, "gemma.task") else null
         val dlDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val extTask = File(dlDir, "gemma.task")
+        val dlTask = File(dlDir, "gemma.task")
         val localTask = File(context.filesDir, "gemma.task")
-        if (extTask.exists() && (!localTask.exists() || localTask.length() != extTask.length())) {
-            try { extTask.copyTo(localTask, overwrite = true) } catch (_: Exception) {}
+
+        val sourceTask = when {
+            extAppTask != null && extAppTask.exists() && extAppTask.length() > 0 -> extAppTask
+            dlTask.exists() && dlTask.length() > 0 -> dlTask
+            else -> null
         }
-        val taskFile = if (localTask.exists() && localTask.length() > 0) localTask else extTask
-        val modelFile = File(dlDir, "model.gguf")
+
+        if (sourceTask != null && (!localTask.exists() || localTask.length() != sourceTask.length())) {
+            try {
+                sourceTask.copyTo(localTask, overwrite = true)
+            } catch (e: Exception) {
+                initError = "Ошибка копирования: ${e.message}"
+            }
+        }
+
         val targetPath = when {
-            taskFile.exists() -> taskFile.absolutePath
-            modelFile.exists() -> modelFile.absolutePath
+            localTask.exists() && localTask.length() > 0 -> localTask.absolutePath
+            extAppTask != null && extAppTask.exists() -> extAppTask.absolutePath
+            dlTask.exists() -> dlTask.absolutePath
             else -> null
         }
 
@@ -53,38 +60,23 @@ class BrainRouter(private val context: Context) {
 
     fun saveToMemory(role: String, text: String) {
         memoryFile.appendText("$role: $text\n")
-        val lower = text.lowercase()
-        if (role == "Пользователь" && (lower.contains("меня зовут") || lower.contains("запомни") || lower.contains("мой телефон"))) {
-            factsFile.appendText("- $text\n")
-        }
     }
 
-    suspend fun askAI(userMessage: String, isOnlineMode: Boolean = false): String {
-        saveToMemory("Пользователь", userMessage)
-
-        if (userMessage.lowercase().contains("включи камеру")) {
-            val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
-            val reply = "Открываю камеру."
-            saveToMemory("ИИ", reply)
-            return reply
+    fun askAI(userMessage: String, isOnlineMode: Boolean): String {
+        saveToMemory("Вы", userMessage)
+        if (llmInference == null) {
+            initModel()
         }
+        val engine = llmInference ?: return "Модель не готова. Положи gemma.task в Download или Android/data/com.myai.assistant/files/. (Детали: $initError)"
 
-        val engine = llmInference
-        if (engine == null) {
-            val err = "Модель не найдена. Положи файл gemma.task в папку Download и дай приложению разрешение на доступ к файлам. (Файл: ${File("/sdcard/Download/gemma.task").exists()}, Ошибка: $initError)"
-            saveToMemory("ИИ", err)
-            return err
-        }
-
-        val eternalFacts = if (factsFile.exists()) factsFile.readText() else "Пока нет сохраненных фактов."
-        val recentChat = loadMemory().takeLast(4000)
+        val eternalFacts = if (factsFile.exists()) factsFile.readText() else ""
+        val allHistory = loadMemory()
+        val recentChat = allHistory.takeLast(1000)
 
         val prompt = """
             <start_of_turn>user
             Ты мой личный офлайн-ассистент на смартфоне. Отвечай кратко и по делу на русском языке.
+            
             Вот что ты помнишь обо мне из прошлых чатов:
             $eternalFacts
             
