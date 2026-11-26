@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://android.com"
     xmlns:tools="http://android.com">
 
+    <uses-sdk tools:overrideLibrary="com.google.mediapipe.tasks.genai, com.google.mediapipe.tasks.core" />
+
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />

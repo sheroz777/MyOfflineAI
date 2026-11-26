@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace 'com.myai.assistant'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.myai.assistant"
-        minSdk 26
-        targetSdk 34
+        minSdk 29
+        targetSdk 35
         versionCode 2
         versionName "1.1"
         ndk {
