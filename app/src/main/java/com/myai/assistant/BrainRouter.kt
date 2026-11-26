@@ -30,7 +30,6 @@ class BrainRouter(private val context: Context) {
                 val options = LlmInference.LlmInferenceOptions.builder()
                     .setModelPath(targetPath)
                     .setMaxTokens(2048)
-                    .setTemperature(0.7f)
                     .build()
                 llmInference = LlmInference.createFromOptions(context, options)
             } catch (e: Exception) {
