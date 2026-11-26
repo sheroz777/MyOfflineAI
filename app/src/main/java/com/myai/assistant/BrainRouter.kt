@@ -43,7 +43,7 @@ class BrainRouter(private val context: Context) {
         return try {
             val config = EngineConfig(
                 modelPath = internalFile.absolutePath,
-                backend = Backend.CPU
+                backend = Backend.CPU()
             )
             val newEngine = Engine(config)
             newEngine.initialize()
