@@ -2,7 +2,7 @@ buildscript {
     repositories {
         google()
         mavenCentral()
-        maven { url 'https://googleapis.com' }
+        maven { url 'https://://googleapis.com' }
     }
     dependencies {
         classpath 'com.android.tools:r8:+'
