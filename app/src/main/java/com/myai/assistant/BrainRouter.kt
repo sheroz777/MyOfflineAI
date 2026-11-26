@@ -11,6 +11,7 @@ class BrainRouter(private val context: Context) {
     private val memoryFile = File(context.filesDir, "chat_memory.txt")
     private val factsFile = File(context.filesDir, "user_facts.txt")
     private var llmInference: LlmInference? = null
+    private var initError: String = ""
 
     init {
         initModel()
@@ -34,6 +35,7 @@ class BrainRouter(private val context: Context) {
                 llmInference = LlmInference.createFromOptions(context, options)
             } catch (e: Exception) {
                 e.printStackTrace()
+                initError = e.message ?: e.toString()
             }
         }
     }
@@ -65,7 +67,7 @@ class BrainRouter(private val context: Context) {
 
         val engine = llmInference
         if (engine == null) {
-            val err = "Модель не найдена. Положи файл gemma.task в папку Download и дай приложению разрешение на доступ к файлам."
+            val err = "Модель не найдена. Положи файл gemma.task в папку Download и дай приложению разрешение на доступ к файлам. (Файл: ${File("/sdcard/Download/gemma.task").exists()}, Ошибка: $initError)"
             saveToMemory("ИИ", err)
             return err
         }
