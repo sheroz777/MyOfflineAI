@@ -6,6 +6,8 @@ plugins {
 android {
     namespace 'com.myai.assistant'
     compileSdk 36
+    lint { checkReleaseBuilds false }
+    androidResources { noCompress "litertlm" }
 
     defaultConfig {
         applicationId "com.myai.assistant"
