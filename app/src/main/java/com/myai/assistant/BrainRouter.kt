@@ -17,23 +17,27 @@ class BrainRouter(private val context: Context) {
 
     fun initModel(): String {
         if (llmInference != null) return "Модель уже готова!"
-        val taskFile = File("/sdcard/Download/gemma.litertlm")
-        val modelFile = File("/sdcard/Download/model.gguf")
-        val targetPath = when {
-            taskFile.exists() && taskFile.canRead() -> taskFile.absolutePath
-            modelFile.exists() && modelFile.canRead() -> modelFile.absolutePath
-            else -> null
-        }
+        val internalFile = File(context.filesDir, "gemma.litertlm")
+        val downloadFile = File("/sdcard/Download/gemma.litertlm")
 
-        if (targetPath == null) {
-            statusMessage = "Файл gemma.litertlm не найден в Download или нет доступа!"
-            return statusMessage
+        if (!internalFile.exists() || internalFile.length() < 100_000_000L) {
+            if (downloadFile.exists() && downloadFile.canRead()) {
+                try {
+                    downloadFile.copyTo(internalFile, overwrite = true)
+                } catch (e: Throwable) {
+                    statusMessage = "Ошибка копирования: ${e.message}"
+                    return statusMessage
+                }
+            } else {
+                statusMessage = "Файл gemma.litertlm не найден в Download или нет доступа!"
+                return statusMessage
+            }
         }
 
         return try {
             val options = LlmInference.LlmInferenceOptions.builder()
-                .setModelPath(targetPath)
-                .setMaxTokens(2048)
+                .setModelPath(internalFile.absolutePath)
+                .setMaxTokens(1024)
                 .build()
             llmInference = LlmInference.createFromOptions(context, options)
             statusMessage = "Офлайн-мозг Gemma 4 активен!"
@@ -73,9 +77,10 @@ class BrainRouter(private val context: Context) {
         }
 
         if (llmInference == null) {
+            onProgress("Подготовка и загрузка мозга (первый раз ~30 сек)...")
             val res = initModel()
             if (llmInference == null) {
-                val err = "Не удалось запустить мозг ($res). Проверь 'Доступ ко всем файлам' в настройках!"
+                val err = "Не удалось запустить мозг ($res)"
                 saveToMemory("vang quer", err)
                 return err
             }
@@ -84,17 +89,17 @@ class BrainRouter(private val context: Context) {
         onProgress("100% — Думаю над ответом...")
 
         val eternalFacts = if (factsFile.exists()) factsFile.readText() else "Пока нет сохраненных фактов."
-        val recentChat = loadMemory().takeLast(4000)
+        val recentChat = loadMemory().takeLast(2000)
 
         val prompt = """
             <start_of_turn>user
             Ты мой личный офлайн-ассистент vang quer на смартфоне. Отвечай кратко, тепло и по делу на русском языке.
             Вот что ты помнишь обо мне из прошлых чатов:
             $eternalFacts
-            
+
             Недавняя переписка:
             $recentChat
-            
+
             Новый вопрос: $userMessage<end_of_turn>
             <start_of_turn>model
         """.trimIndent()
