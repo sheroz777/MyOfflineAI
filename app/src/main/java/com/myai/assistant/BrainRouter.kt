@@ -10,6 +10,9 @@ import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Message
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class BrainRouter(private val context: Context) {
 
@@ -31,7 +34,7 @@ class BrainRouter(private val context: Context) {
 
         val downloadFile = File("/sdcard/Download/gemma.litertlm")
         if (!downloadFile.exists() || !downloadFile.canRead()) {
-            statusMessage = "Нет доступа к /sdcard/Download/gemma.litertlm! Выдай разрешение 'Доступ ко всем файлам' в настройках."
+            statusMessage = "Нет доступа к /sdcard/Download/gemma.litertlm!"
             return statusMessage
         }
 
@@ -40,7 +43,7 @@ class BrainRouter(private val context: Context) {
                 modelPath = downloadFile.absolutePath,
                 backend = Backend.CPU(),
                 cacheDir = context.cacheDir.absolutePath,
-                maxNumTokens = 1024
+                maxNumTokens = 2048
             )
             val newEngine = Engine(config)
             newEngine.initialize()
@@ -59,10 +62,40 @@ class BrainRouter(private val context: Context) {
     }
 
     fun saveToMemory(role: String, text: String) {
-        memoryFile.appendText("$role: $text\n")
+        if (text.startsWith("Ошибка генерации:") || text.startsWith("Не удалось запустить")) return
+        val time = SimpleDateFormat("dd.MM HH:mm", Locale.getDefault()).format(Date())
+        memoryFile.appendText("[$time] $role: $text\n")
+
         val lower = text.lowercase()
-        if (role == "Пользователь" && (lower.contains("меня зовут") || lower.contains("запомни") || lower.contains("мой телефон"))) {
+        val triggers = listOf("меня зовут", "запомни", "мой телефон", "я люблю", "я работаю", "моя привычка", "не люблю")
+        if (role == "Пользователь" && triggers.any { lower.contains(it) }) {
             factsFile.appendText("- $text\n")
+        }
+    }
+
+    private fun searchOldChats(query: String): String {
+        if (!memoryFile.exists()) return ""
+        val lines = memoryFile.readLines().filter {
+            !it.contains("Ошибка генерации:") && !it.contains("Не удалось запустить")
+        }
+        if (lines.isEmpty()) return ""
+
+        val lower = query.lowercase()
+        val recallTriggers = listOf("вспомни", "спомни", "помнишь", "раньше", "вчера", "стары", "чат", "говорил", "писал")
+        val isRecall = recallTriggers.any { lower.contains(it) }
+
+        val words = lower.split(Regex("[^а-яёa-z0-9]+")).filter { it.length > 3 }
+        val matched = if (words.isNotEmpty()) {
+            lines.filter { line ->
+                val l = line.lowercase()
+                words.any { w -> l.contains(w) }
+            }.takeLast(6)
+        } else emptyList()
+
+        return when {
+            matched.isNotEmpty() -> "Найденные записи из старых чатов:\n" + matched.joinToString("\n")
+            isRecall -> "Последние записи из архива чатов:\n" + lines.takeLast(6).joinToString("\n")
+            else -> ""
         }
     }
 
@@ -70,9 +103,8 @@ class BrainRouter(private val context: Context) {
         userMessage: String,
         onProgress: suspend (String) -> Unit
     ): String {
-        saveToMemory("Пользователь", userMessage)
-
         if (userMessage.lowercase().contains("включи камеру")) {
+            saveToMemory("Пользователь", userMessage)
             val intent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
@@ -83,31 +115,38 @@ class BrainRouter(private val context: Context) {
         }
 
         if (conversation == null) {
-            onProgress("Загружаю мозг Ван Сюер в память (подождите ~20 сек)...")
+            onProgress("Загружаю мозг Ван Сюер в память (~15 сек)...")
             val res = initModel()
             if (conversation == null) {
-                val err = "Не удалось запустить мозг ($res)"
-                saveToMemory("vang quer", err)
-                return err
+                return "Не удалось запустить мозг ($res)"
             }
         }
 
         onProgress("100% — Думаю над ответом...")
 
-        val eternalFacts = if (factsFile.exists()) factsFile.readText() else "Пока нет сохраненных фактов."
-        val prompt = """
-            Ты мой личный офлайн-ассистент Ван Сюер (vang quer) на смартфоне. Отвечай кратко, тепло и по делу на русском языке.
-            Вот что ты помнишь обо мне:
-            $eternalFacts
+        val eternalFacts = if (factsFile.exists()) factsFile.readText().lines().takeLast(15).joinToString("\n") else "Пока нет фактов."
+        val archiveContext = searchOldChats(userMessage)
 
-            Вопрос: $userMessage
-        """.trimIndent()
+        saveToMemory("Пользователь", userMessage)
+
+        val prompt = buildString {
+            appendLine("Ты мой личный офлайн-ассистент Ван Сюер (vang quer) на смартфоне. Отвечай тепло, кратко и по делу на русском языке.")
+            appendLine("Постоянные факты о пользователе:\n$eternalFacts")
+            if (archiveContext.isNotEmpty()) {
+                appendLine("\n$archiveContext")
+            }
+            appendLine("\nТекущий вопрос пользователя: $userMessage")
+        }
 
         val aiReply = try {
-            val response = conversation!!.sendMessage(Message.of(prompt))
-            response.toString()
+            conversation!!.sendMessage(Message.of(prompt)).toString()
         } catch (e: Throwable) {
-            "Ошибка генерации: ${e.message}"
+            try {
+                conversation = engine?.createConversation(ConversationConfig())
+                conversation!!.sendMessage(Message.of(prompt)).toString()
+            } catch (e2: Throwable) {
+                "Ошибка генерации: ${e2.message}"
+            }
         }
 
         saveToMemory("vang quer", aiReply)
