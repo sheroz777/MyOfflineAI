@@ -39,7 +39,8 @@ class BrainRouter(private val context: Context) {
             val config = EngineConfig(
                 modelPath = downloadFile.absolutePath,
                 backend = Backend.GPU(),
-                cacheDir = context.cacheDir.absolutePath
+                cacheDir = context.cacheDir.absolutePath,
+                maxNumTokens = 1024
             )
             val newEngine = Engine(config)
             newEngine.initialize()
