@@ -14,9 +14,10 @@
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <application android:requestLegacyExternalStorage="true"
+    <application
+        android:icon="@drawable/ic_launcher" android:requestLegacyExternalStorage="true"
         android:allowBackup="true" android:largeHeap="true"
-        android:label="My AI"
+        android:label="Ван Сюер"
         android:theme="@style/Theme.MaterialComponents.DayNight.DarkActionBar"
         tools:replace="android:allowBackup,android:label">
         <activity
