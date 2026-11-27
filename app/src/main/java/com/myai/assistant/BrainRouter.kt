@@ -23,33 +23,29 @@ class BrainRouter(private val context: Context) {
 
     fun initModel(): String {
         if (conversation != null) return "Модель уже готова!"
-        val internalFile = File(context.filesDir, "gemma.litertlm")
-        val downloadFile = File("/sdcard/Download/gemma.litertlm")
 
-        if (!internalFile.exists() || internalFile.length() < 100_000_000L) {
-            if (downloadFile.exists() && downloadFile.canRead()) {
-                try {
-                    downloadFile.copyTo(internalFile, overwrite = true)
-                } catch (e: Throwable) {
-                    statusMessage = "Ошибка копирования: ${e.message}"
-                    return statusMessage
-                }
-            } else {
-                statusMessage = "Файл gemma.litertlm не найден в Download!"
-                return statusMessage
-            }
+        val oldInternalFile = File(context.filesDir, "gemma.litertlm")
+        if (oldInternalFile.exists()) {
+            oldInternalFile.delete()
+        }
+
+        val downloadFile = File("/sdcard/Download/gemma.litertlm")
+        if (!downloadFile.exists() || !downloadFile.canRead()) {
+            statusMessage = "Нет доступа к /sdcard/Download/gemma.litertlm! Выдай разрешение 'Доступ ко всем файлам' в настройках."
+            return statusMessage
         }
 
         return try {
             val config = EngineConfig(
-                modelPath = internalFile.absolutePath,
-                backend = Backend.CPU()
+                modelPath = downloadFile.absolutePath,
+                backend = Backend.CPU(),
+                cacheDir = context.cacheDir.absolutePath
             )
             val newEngine = Engine(config)
             newEngine.initialize()
             engine = newEngine
             conversation = newEngine.createConversation(ConversationConfig())
-            statusMessage = "Офлайн-мозг Gemma 4 активен!"
+            statusMessage = "Офлайн-мозг Ван Сюер активен!"
             statusMessage
         } catch (e: Throwable) {
             statusMessage = "Ошибка: ${e.message}"
@@ -86,7 +82,7 @@ class BrainRouter(private val context: Context) {
         }
 
         if (conversation == null) {
-            onProgress("Загружаю мозг в память (подождите ~20 сек)...")
+            onProgress("Загружаю мозг Ван Сюер в память (подождите ~20 сек)...")
             val res = initModel()
             if (conversation == null) {
                 val err = "Не удалось запустить мозг ($res)"
@@ -99,7 +95,7 @@ class BrainRouter(private val context: Context) {
 
         val eternalFacts = if (factsFile.exists()) factsFile.readText() else "Пока нет сохраненных фактов."
         val prompt = """
-            Ты мой личный офлайн-ассистент vang quer на смартфоне. Отвечай кратко, тепло и по делу на русском языке.
+            Ты мой личный офлайн-ассистент Ван Сюер (vang quer) на смартфоне. Отвечай кратко, тепло и по делу на русском языке.
             Вот что ты помнишь обо мне:
             $eternalFacts
 
